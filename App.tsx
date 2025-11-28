@@ -84,13 +84,13 @@ const App: React.FC = () => {
     audioManager.setMute(newState);
   };
 
-  const togglePause = () => {
-    if (gameState === GameState.PLAYING) {
-      setGameState(GameState.PAUSED);
-    } else if (gameState === GameState.PAUSED) {
-      setGameState(GameState.PLAYING);
-    }
-  };
+  const togglePause = useCallback(() => {
+    setGameState(prev => {
+      if (prev === GameState.PLAYING) return GameState.PAUSED;
+      if (prev === GameState.PAUSED) return GameState.PLAYING;
+      return prev;
+    });
+  }, []);
 
   const togglePublisher = (pub: string) => {
     setSelectedPublishers(prev => 
@@ -392,28 +392,16 @@ const App: React.FC = () => {
       audioManager.playVictorySound();
   };
 
-  // Input Handling
+  // Input Handling logic separated for mobile/keyboard reuse
   const currentWord = vocabulary[vocabIndex];
   const currentChar = currentWord?.chars[charIndex];
   const currentTargetKey = currentChar?.keys[keyIndex];
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === ' ') e.preventDefault(); // Stop scrolling
-      
-      // Pause Toggle
-      if (e.key === 'Escape') {
-          togglePause();
-          return;
-      }
-
+  const handleInput = useCallback((inputKey: string) => {
       // Input Blockers
       if (gameState === GameState.PAUSED) return;
       if (gameState !== GameState.PLAYING || !currentTargetKey || currentChar?.isContext) return;
       if (bossHp <= 0 || playerStats.hp <= 0 || isExploding) return; // Prevent typing during death animation
-
-      const inputKey = e.key.toLowerCase();
-      if (['shift', 'control', 'alt', 'meta'].includes(inputKey)) return;
 
       setLastPressedKey(inputKey);
 
@@ -477,11 +465,28 @@ const App: React.FC = () => {
       }
       
       setTimeout(() => setLastPressedKey(null), 200);
+  }, [gameState, currentTargetKey, currentChar, keyIndex, charIndex, vocabIndex, currentWord, vocabulary, gameMode, bossHp, playerStats, isExploding, wave]);
+
+  // Keyboard Event Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ') e.preventDefault(); // Stop scrolling
+      
+      // Pause Toggle
+      if (e.key === 'Escape') {
+          togglePause();
+          return;
+      }
+
+      const inputKey = e.key.toLowerCase();
+      if (['shift', 'control', 'alt', 'meta'].includes(inputKey)) return;
+
+      handleInput(inputKey);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, currentTargetKey, keyIndex, charIndex, vocabIndex, vocabulary, gameMode, bossHp, playerStats, isExploding]);
+  }, [handleInput, togglePause]);
 
   // Game Over Watchers
   useEffect(() => {
@@ -817,6 +822,7 @@ const App: React.FC = () => {
                   activeKey={currentTargetKey || null}
                   pressedKey={lastPressedKey}
                   showHints={showHint}
+                  onKeyPress={handleInput}
                 />
             </div>
             
