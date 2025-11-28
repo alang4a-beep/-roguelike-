@@ -1,12 +1,10 @@
 
-
 // A simple synthesizer using Web Audio API to avoid external file dependencies
 class AudioManager {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
   private bgmOscillators: OscillatorNode[] = [];
   private bgmGain: GainNode | null = null;
-  // Removed unused isBgmPlaying property
 
   constructor() {
     // We defer initialization until the first interaction to comply with browser autoplay policies
@@ -23,9 +21,9 @@ class AudioManager {
 
   public setMute(mute: boolean) {
     this.isMuted = mute;
-    if (this.bgmGain) {
+    if (this.bgmGain && this.ctx) {
       // Smooth fade
-      const now = this.ctx?.currentTime || 0;
+      const now = this.ctx.currentTime;
       this.bgmGain.gain.setTargetAtTime(mute ? 0 : 0.05, now, 0.5);
     }
   }
@@ -39,22 +37,23 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
     
-    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
 
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.1);
+    osc.stop(ctx.currentTime + 0.1);
   }
 
   // SFX: Sword Slash / Heavy Impact (Distinct from error)
@@ -62,39 +61,40 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
-    const t = this.ctx.currentTime;
+    const t = ctx.currentTime;
 
     // 1. Noise Burst (Impact Texture)
     // Create a short burst of noise for the "crunch" or "hit"
-    const bufferSize = this.ctx.sampleRate * 0.1; // 0.1 seconds
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const bufferSize = ctx.sampleRate * 0.1; // 0.1 seconds
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
       data[i] = Math.random() * 2 - 1;
     }
-    const noise = this.ctx.createBufferSource();
+    const noise = ctx.createBufferSource();
     noise.buffer = buffer;
     
     // Filter the noise to make it less harsh (Lowpass)
-    const noiseFilter = this.ctx.createBiquadFilter();
+    const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'lowpass';
     noiseFilter.frequency.setValueAtTime(isCrit ? 3000 : 1000, t);
 
-    const noiseGain = this.ctx.createGain();
+    const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0.3, t);
     noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
 
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
+    noiseGain.connect(ctx.destination);
     noise.start(t);
 
     // 2. Tonal Swipe (The "Slash" or "Thud")
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
 
     if (isCrit) {
         // Critical: Metallic "Shwing" - High pitch Sawtooth sweeping down
@@ -126,22 +126,23 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
 
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(120, this.ctx.currentTime); // Lower pitch
-    osc.frequency.linearRampToValueAtTime(80, this.ctx.currentTime + 0.2); // Pitch bend down
+    osc.frequency.setValueAtTime(120, ctx.currentTime); // Lower pitch
+    osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.2); // Pitch bend down
     
-    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.2);
 
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.2);
+    osc.stop(ctx.currentTime + 0.2);
   }
 
   // SFX: Player hurt
@@ -149,19 +150,20 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
     // Noise-like using multiple oscillators
     for (let i = 0; i < 3; i++) {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(ctx.destination);
         
-        osc.frequency.setValueAtTime(100 + Math.random() * 200, this.ctx.currentTime);
-        gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(100 + Math.random() * 200, ctx.currentTime);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
         osc.start();
-        osc.stop(this.ctx.currentTime + 0.3);
+        osc.stop(ctx.currentTime + 0.3);
     }
   }
 
@@ -170,31 +172,32 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
-    const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const bufferSize = ctx.sampleRate * 2; // 2 seconds
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
 
     for (let i = 0; i < bufferSize; i++) {
       data[i] = Math.random() * 2 - 1;
     }
 
-    const noise = this.ctx.createBufferSource();
+    const noise = ctx.createBufferSource();
     noise.buffer = buffer;
 
-    const filter = this.ctx.createBiquadFilter();
+    const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 1000;
 
-    const gain = this.ctx.createGain();
+    const gain = ctx.createGain();
     
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
 
-    filter.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 1);
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1);
+    filter.frequency.exponentialRampToValueAtTime(10, ctx.currentTime + 1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
 
     noise.start();
   }
@@ -204,8 +207,8 @@ class AudioManager {
     if (this.isMuted) return;
     this.init();
     if (!this.ctx) return;
+    const ctx = this.ctx; // Capture for TS safety
 
-    const ctx = this.ctx; // Capture non-null context for use in callback
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C Major Arpeggio
     
@@ -226,13 +229,11 @@ class AudioManager {
   }
 
   // BGM: Simple ambient drone loop
-  // Disabled per request, but keeping method sig compatible
   public startBGM() {
       // No-op
   }
 
   public stopBGM() {
-    // this.isBgmPlaying = false; // Property removed
     this.bgmOscillators.forEach(osc => {
         try { osc.stop(); } catch(e) {}
     });
