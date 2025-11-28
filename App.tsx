@@ -5,7 +5,7 @@ import { fetchVocabulary, getCorpusMetadata } from './services/geminiService';
 import { audioManager } from './services/audioManager';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { Button } from './components/Button';
-import { CORRECT_KEYBOARD_ROWS, ROGUELIKE_SKILLS, BOSS_ROSTER } from './constants';
+import { ROGUELIKE_SKILLS, BOSS_ROSTER } from './constants';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
@@ -563,6 +563,14 @@ const App: React.FC = () => {
                         <span key={zIdx} className="block py-0.5">{z}</span>
                     ))}
                 </div>
+                
+                {/* Memory Hint Timer Overlay */}
+                {!showZhuyinText && isCurrent && (
+                    <div className="absolute top-0 text-xs text-yellow-500 font-mono animate-pulse">
+                        {timeUntilHint}s
+                    </div>
+                )}
+
                 <div className={`
                   text-5xl font-bold rounded-lg p-4 border-2 min-w-[80px] text-center
                   ${isCurrent ? 'bg-gray-700 border-blue-500 text-white shadow-lg shadow-blue-500/20' : ''}
@@ -617,6 +625,7 @@ const App: React.FC = () => {
                     第 {wave} 波
                 </div>
                 <div className="bg-gray-800 px-3 py-1 rounded">得分: <span className="text-green-400">{score}</span></div>
+                <div className="bg-gray-800 px-3 py-1 rounded">錯誤: <span className="text-red-400">{errors}</span></div>
             </div>
             )}
         </div>
@@ -624,6 +633,13 @@ const App: React.FC = () => {
 
       <main className="flex-1 w-full max-w-4xl flex flex-col items-center justify-start relative z-10">
         
+        {/* Loading */}
+        {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-50">
+                <div className="text-2xl font-bold text-blue-400 animate-pulse">載入中...</div>
+            </div>
+        )}
+
         {/* MENU STATE */}
         {gameState === GameState.MENU && (
           <div className="text-center space-y-8 animate-fade-in w-full max-w-2xl py-4">

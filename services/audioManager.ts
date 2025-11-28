@@ -6,7 +6,7 @@ class AudioManager {
   private isMuted: boolean = false;
   private bgmOscillators: OscillatorNode[] = [];
   private bgmGain: GainNode | null = null;
-  private isBgmPlaying: boolean = false;
+  // Removed unused isBgmPlaying property
 
   constructor() {
     // We defer initialization until the first interaction to comply with browser autoplay policies
@@ -205,14 +205,15 @@ class AudioManager {
     this.init();
     if (!this.ctx) return;
 
-    const now = this.ctx.currentTime;
+    const ctx = this.ctx; // Capture non-null context for use in callback
+    const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C Major Arpeggio
     
     notes.forEach((freq, i) => {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(ctx.destination);
         
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, now + i * 0.1);
@@ -231,7 +232,7 @@ class AudioManager {
   }
 
   public stopBGM() {
-    this.isBgmPlaying = false;
+    // this.isBgmPlaying = false; // Property removed
     this.bgmOscillators.forEach(osc => {
         try { osc.stop(); } catch(e) {}
     });
