@@ -7,6 +7,7 @@ export enum GameMode {
 export enum GameState {
   MENU = 'MENU',
   PLAYING = 'PLAYING',
+  PAUSED = 'PAUSED', // New state for Pause Menu
   CHOOSING_SKILL = 'CHOOSING_SKILL', // New state for Roguelike skill selection
   FINISHED = 'FINISHED',
 }

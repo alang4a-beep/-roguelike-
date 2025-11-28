@@ -37,6 +37,7 @@ const App: React.FC = () => {
   const [wave, setWave] = useState(1);
   const [score, setScore] = useState(0);
   const [errors, setErrors] = useState(0);
+  const [acquiredSkills, setAcquiredSkills] = useState<Skill[]>([]);
 
   const [playerStats, setPlayerStats] = useState<PlayerStats>({
     hp: 100,
@@ -81,6 +82,14 @@ const App: React.FC = () => {
     const newState = !isMuted;
     setIsMuted(newState);
     audioManager.setMute(newState);
+  };
+
+  const togglePause = () => {
+    if (gameState === GameState.PLAYING) {
+      setGameState(GameState.PAUSED);
+    } else if (gameState === GameState.PAUSED) {
+      setGameState(GameState.PLAYING);
+    }
   };
 
   const togglePublisher = (pub: string) => {
@@ -154,6 +163,7 @@ const App: React.FC = () => {
       setErrors(0);
       setKeyIndex(0);
       setWave(1);
+      setAcquiredSkills([]);
 
       // Reset Player Stats
       setPlayerStats({
@@ -351,6 +361,7 @@ const App: React.FC = () => {
   };
 
   const selectSkill = (skill: Skill) => {
+      setAcquiredSkills(prev => [...prev, skill]);
       setPlayerStats(prev => {
           let newStats = { ...prev };
           switch (skill.type) {
@@ -389,7 +400,15 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === ' ') e.preventDefault(); // Stop scrolling
+      
+      // Pause Toggle
+      if (e.key === 'Escape') {
+          togglePause();
+          return;
+      }
 
+      // Input Blockers
+      if (gameState === GameState.PAUSED) return;
       if (gameState !== GameState.PLAYING || !currentTargetKey || currentChar?.isContext) return;
       if (bossHp <= 0 || playerStats.hp <= 0 || isExploding) return; // Prevent typing during death animation
 
@@ -575,14 +594,25 @@ const App: React.FC = () => {
           ㄅㄆㄇ注音大師 <span className="text-xs text-gray-500 ml-2">Roguelike Edition</span>
         </h1>
         <div className="flex items-center gap-4">
+             {/* Pause Button */}
+            {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
+                <button 
+                    onClick={togglePause}
+                    className="p-2 rounded-full bg-gray-700 border border-gray-600 hover:bg-gray-600 transition-all text-xl w-10 h-10 flex items-center justify-center"
+                    title="暫停"
+                >
+                    {gameState === GameState.PAUSED ? '▶' : '⏸'}
+                </button>
+            )}
+
             <button 
                 onClick={toggleMute} 
                 className={`p-2 rounded-full border ${isMuted ? 'bg-red-900/50 border-red-700 text-red-300' : 'bg-green-900/50 border-green-700 text-green-300'} transition-all`}
             >
                 {isMuted ? '🔇' : '🔊'}
             </button>
-            {gameState === GameState.PLAYING && (
-            <div className="flex gap-4 text-sm font-mono items-center">
+            {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
+            <div className="flex gap-4 text-sm font-mono items-center hidden sm:flex">
                 <div className="bg-yellow-900/40 border border-yellow-700 text-yellow-200 px-3 py-1 rounded">
                     第 {wave} 波
                 </div>
@@ -650,27 +680,12 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* PLAYING STATE */}
-        {(gameState === GameState.PLAYING || gameState === GameState.CHOOSING_SKILL) && (
+        {/* PLAYING / PAUSED STATE */}
+        {(gameState === GameState.PLAYING || gameState === GameState.CHOOSING_SKILL || gameState === GameState.PAUSED) && (
           <div className="w-full flex flex-col items-center animate-fade-in relative h-full">
             
-            {/* PLAYER STATUS BAR */}
-            <div className="absolute top-0 left-0 p-2 z-30 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-xl shadow-lg border-2 border-green-400">
-                    😊
-                </div>
-                <div className="flex flex-col">
-                    <div className="w-40 h-4 bg-gray-900 rounded-full border border-gray-600 overflow-hidden relative">
-                         <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${(playerStats.hp / playerStats.maxHp) * 100}%` }}></div>
-                         <span className="absolute inset-0 text-[10px] flex items-center justify-center font-bold drop-shadow">
-                            HP: {Math.ceil(playerStats.hp)} / {playerStats.maxHp}
-                         </span>
-                    </div>
-                </div>
-            </div>
-
             {/* BOSS SECTION */}
-            <div className="w-full flex flex-col items-center mb-6 relative mt-8">
+            <div className="w-full flex flex-col items-center mb-6 relative mt-4">
                 {/* Boss HP */}
                 <div className="w-full max-w-md h-6 bg-gray-800 rounded-full border border-gray-600 overflow-hidden relative shadow-lg">
                     <div 
@@ -762,9 +777,26 @@ const App: React.FC = () => {
                 }
             `}</style>
 
+            {/* QUESTION DISPLAY */}
             {renderCurrentWordDisplay()}
 
-            <div className="relative z-10 mt-8">
+            {/* PLAYER STATUS BAR (Moved here) */}
+            <div className="w-full max-w-2xl mb-4 flex items-center gap-4 z-20 px-4">
+                 <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center text-2xl shadow-lg border-2 border-green-400 shrink-0">
+                    😊
+                </div>
+                <div className="flex-1 flex flex-col">
+                    <div className="w-full h-6 bg-gray-900 rounded-full border border-gray-600 overflow-hidden relative">
+                         <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${(playerStats.hp / playerStats.maxHp) * 100}%` }}></div>
+                         <span className="absolute inset-0 text-xs flex items-center justify-center font-bold drop-shadow">
+                            HP: {Math.ceil(playerStats.hp)} / {playerStats.maxHp}
+                         </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* VIRTUAL KEYBOARD */}
+            <div className="relative z-10 w-full">
                 <VirtualKeyboard 
                   activeKey={currentTargetKey || null}
                   pressedKey={lastPressedKey}
@@ -774,12 +806,53 @@ const App: React.FC = () => {
             
              <Button 
                 variant="outline" 
-                className="mt-8 text-sm py-2 px-4 border-gray-700 hover:bg-red-900/20 hover:border-red-500 hover:text-red-400 z-10"
+                className="mt-8 text-sm py-2 px-4 border-gray-700 hover:bg-red-900/20 hover:border-red-500 hover:text-red-400 z-10 opacity-60 hover:opacity-100"
                 onClick={() => { setGameState(GameState.MENU); audioManager.stopBGM(); }}
             >
                 放棄遊戲
             </Button>
           </div>
+        )}
+
+        {/* PAUSE MENU OVERLAY */}
+        {gameState === GameState.PAUSED && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                <h2 className="text-4xl font-bold text-white mb-8">遊戲暫停</h2>
+                
+                <div className="flex flex-col gap-4 w-64 mb-10">
+                    <Button onClick={togglePause} className="w-full bg-green-600 hover:bg-green-500 text-lg">
+                        ▶ 繼續遊戲
+                    </Button>
+                    <Button onClick={() => startGame(gameMode)} className="w-full bg-blue-600 hover:bg-blue-500">
+                        ↻ 重新遊戲
+                    </Button>
+                    <Button onClick={() => setGameState(GameState.MENU)} className="w-full bg-gray-600 hover:bg-gray-500">
+                        ⌂ 返回主頁
+                    </Button>
+                </div>
+
+                {/* Acquired Skills View */}
+                <div className="w-full max-w-4xl">
+                     <h3 className="text-xl text-gray-400 mb-4 border-b border-gray-700 pb-2 text-center">已獲得技能</h3>
+                     {acquiredSkills.length === 0 ? (
+                         <p className="text-gray-500 text-center">尚未獲得任何技能</p>
+                     ) : (
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[30vh] overflow-y-auto p-2">
+                             {acquiredSkills.map((skill, idx) => (
+                                 <div key={idx} className={`p-3 rounded-lg border bg-gray-800/50 text-left ${
+                                    skill.rarity === 'COMMON' ? 'border-gray-600' :
+                                    skill.rarity === 'RARE' ? 'border-blue-600 text-blue-100' :
+                                    'border-purple-600 text-purple-100'
+                                 }`}>
+                                     <div className="text-xs font-bold opacity-70 mb-1">{skill.rarity}</div>
+                                     <div className="font-bold">{skill.name}</div>
+                                     <div className="text-xs text-gray-400 mt-1">{skill.description}</div>
+                                 </div>
+                             ))}
+                         </div>
+                     )}
+                </div>
+            </div>
         )}
 
         {/* SKILL SELECTION MODAL */}
