@@ -2,6 +2,7 @@
 import { VocabularyItem, ZhuyinChar, GameFilters } from '../types';
 import { CORRECT_ZHUYIN_TO_KEY } from '../constants';
 import { CORPUS_DATA } from './corpus';
+import { getCustomCorpus } from './customStorage';
 
 // Helper to convert raw zhuyin string to keys array
 const convertZhuyinToKeys = (zhuyin: string): string[] => {
@@ -34,6 +35,7 @@ const convertZhuyinToKeys = (zhuyin: string): string[] => {
 // Parse a single question item line from the corpus
 const parseCorpusItem = (text: string, idPrefix: string, publisher: string, grade: string, lesson: string): VocabularyItem | null => {
   // Regex to handle filled characters: (Char)Zhuyin
+  // Format: PreContext(TargetChar)ZhuyinPostContext
   const regex = /^(.*?)(\((.*?)\))([\u3105-\u3129\u02CA\u02C7\u02CB\u02D9\s]+)(.*)$/;
   const match = text.trim().match(regex);
 
@@ -89,13 +91,17 @@ const parseCorpusItem = (text: string, idPrefix: string, publisher: string, grad
 let CACHED_ITEMS: VocabularyItem[] | null = null;
 let CACHED_METADATA: { publishers: string[], grades: string[], lessons: string[] } | null = null;
 
-const parseCorpusData = () => {
+export const parseCorpusData = () => {
   const items: VocabularyItem[] = [];
   const publishersSet = new Set<string>();
   const gradesSet = new Set<string>();
   const lessonsSet = new Set<string>();
 
-  const lines = CORPUS_DATA.split('\n');
+  // Combine Static Corpus + Custom User Corpus
+  const customData = getCustomCorpus();
+  const fullData = CORPUS_DATA + '\n' + customData;
+
+  const lines = fullData.split('\n');
   
   let currentPublisher = '通用';
   let currentGrade = '通用';
@@ -108,8 +114,6 @@ const parseCorpusData = () => {
     const pubMatch = trimmed.match(/^【(.*?)(?:\s*\(.*\))?】/);
     if (pubMatch) {
       // Extract just the Chinese part usually, e.g. "康軒" from "康軒 (Kangxuan)"
-      // The regex ^【(.*?)】 captures everything inside.
-      // Let's take the first part before a space or parenthesis for cleaner UI
       const rawPub = pubMatch[1]; 
       const cleanPub = rawPub.split(' ')[0]; 
       currentPublisher = cleanPub;
@@ -117,9 +121,8 @@ const parseCorpusData = () => {
       return;
     }
 
-    // Detect Grade: 一年級 (Grade 1)
-    // We look for Chinese numbers followed by 年級
-    const gradeMatch = trimmed.match(/^([一二三四五六]年級)/);
+    // Detect Grade: 一年級 (Grade 1) or 自訂等級
+    const gradeMatch = trimmed.match(/^([一二三四五六]年級|自訂等級)/);
     if (gradeMatch) {
       currentGrade = gradeMatch[1];
       gradesSet.add(currentGrade);
@@ -146,8 +149,12 @@ const parseCorpusData = () => {
     }
   });
 
-  // Natural sort for lessons (Lesson 1, Lesson 2, Lesson 10) instead of String sort (1, 10, 2)
+  // Natural sort for lessons
   const sortedLessons = Array.from(lessonsSet).sort((a, b) => {
+    // Custom logic: keep "我的練習" at the top or bottom
+    if (a.includes('我的練習')) return -1;
+    if (b.includes('我的練習')) return 1;
+
     const extractNum = (s: string) => parseInt(s.match(/\d+/)?.[0] || '0', 10);
     return extractNum(a) - extractNum(b);
   });
@@ -164,14 +171,14 @@ const parseCorpusData = () => {
 parseCorpusData();
 
 export const getCorpusMetadata = () => {
-  if (!CACHED_METADATA) parseCorpusData();
+  // Always re-parse to ensure custom items added are reflected immediately
+  parseCorpusData();
   return CACHED_METADATA || { publishers: [], grades: [], lessons: [] };
 };
 
 export const fetchVocabulary = async (count: number = 10, filters?: GameFilters): Promise<VocabularyItem[]> => {
-  if (!CACHED_ITEMS) {
-    parseCorpusData();
-  }
+  // Re-parse to catch updates
+  parseCorpusData();
 
   if (!CACHED_ITEMS || CACHED_ITEMS.length === 0) {
     return []; 

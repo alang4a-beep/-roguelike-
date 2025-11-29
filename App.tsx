@@ -1,17 +1,53 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameMode, GameState, VocabularyItem, GameFilters, DamageEffect, Projectile, PlayerStats, Skill, BuffType, BossConfig, PlayerClassConfig, Difficulty } from './types';
-import { fetchVocabulary, getCorpusMetadata } from './services/geminiService';
+import { fetchVocabulary, getCorpusMetadata, parseCorpusData } from './services/geminiService';
 import { audioManager } from './services/audioManager';
+import { getRawCustomItems, saveCustomCorpusFromText } from './services/customStorage';
 import { VirtualKeyboard } from './components/VirtualKeyboard';
 import { Button } from './components/Button';
 import { ROGUELIKE_SKILLS, BOSS_ROSTER, PLAYER_CLASSES } from './constants';
+
+const AI_PROMPT_TEMPLATE_SENTENCE = `請幫我生成適合小學生練習的注音填空題目，請嚴格遵守以下格式規則：
+
+### 格式要求
+1. 請以「文字(注音)文字」的格式輸出。
+2. 括號 \`()\` 前面是「目標字」，括號內是該字的「注音」，括號後是後面的詞。
+3. 如果是詞語的第一個字要練習，格式如：\`紅(ㄏㄨㄥˊ)色\`。
+4. 如果是詞語的第二個字要練習，格式如：\`快(ㄎㄨㄞˋ)樂\` (注意：請將練習字放在括號前，注音放在括號內)。
+5. 請直接列出題目，不需要編號，每題之間用「分號；」隔開，或者一行一個。
+6. 注音請使用標準注音符號，包含聲調 (ˊ ˇ ˋ ˙)，一聲請留空或用空白。
+
+### 範例
+紅(ㄏㄨㄥˊ)色；藍(ㄌㄢˊ)天；白(ㄅㄞˊ)雲；開(ㄎㄞ)心；遊(ㄧㄡˊ)戲
+
+### 請生成 20 個關於「[在此輸入主題，例如：動物、水果、日常用品]」的題目：`;
+
+const AI_PROMPT_TEMPLATE_VOCAB = `我會提供一組生字，請你幫我針對每一個字：
+1. 標註注音 (若有輕聲請標註)。
+2. 造一個適合國小學生的語詞，並將該生字放在語詞的「第一個字」。
+3. 輸出格式必須嚴格遵守：生字(注音)語詞
+   (注意：不需要空格，也不要用逗號，請用括號包住注音)
+4. 不需要標題列，不需要解釋。
+5. 請用分號「;」將每一題隔開，以便複製。
+
+### 範例
+拍(ㄆㄞ)拍手；手(ㄕㄡˇ)手套；左(ㄗㄨㄛˇ)左邊
+
+### 我的生字是：
+[請在此處貼上您的生字，例如：樹、花、草]`;
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
   const [gameMode, setGameMode] = useState<GameMode>(GameMode.LEARNING);
   const [vocabulary, setVocabulary] = useState<VocabularyItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Custom Editor State
+  const [isEditingCustom, setIsEditingCustom] = useState(false);
+  const [customBulkText, setCustomBulkText] = useState('');
+  const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [activePromptTemplate, setActivePromptTemplate] = useState(AI_PROMPT_TEMPLATE_SENTENCE); // New: Toggle State
 
   // Filters
   const [availableMetadata, setAvailableMetadata] = useState<{publishers: string[], grades: string[], lessons: string[]}>({ publishers: [], grades: [], lessons: [] });
@@ -34,7 +70,7 @@ const App: React.FC = () => {
   const [lastPressedKey, setLastPressedKey] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false); // New: Voice Toggle
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   
   // Skill & Performance State
   const [comboStreak, setComboStreak] = useState(0);
@@ -74,7 +110,7 @@ const App: React.FC = () => {
   const [bossHp, setBossHp] = useState(1000);
   const [currentBoss, setCurrentBoss] = useState<BossConfig>(BOSS_ROSTER[0]);
   const [isBossShaking, setIsBossShaking] = useState(false);
-  const [isBossCharging, setIsBossCharging] = useState(false); // New: Charging state
+  const [isBossCharging, setIsBossCharging] = useState(false);
   const [isBossAttacking, setIsBossAttacking] = useState(false);
   const [isExploding, setIsExploding] = useState(false);
   const [isPlayerHit, setIsPlayerHit] = useState(false); // For screen shake
@@ -95,13 +131,18 @@ const App: React.FC = () => {
 
   // Load Metadata on mount
   useEffect(() => {
-    const meta = getCorpusMetadata();
-    setAvailableMetadata(meta);
+    refreshMetadata();
     // Default select all
+    const meta = getCorpusMetadata();
     setSelectedPublishers(meta.publishers);
     setSelectedGrades(meta.grades);
     setSelectedLessons(meta.lessons);
   }, []);
+
+  const refreshMetadata = () => {
+    const meta = getCorpusMetadata();
+    setAvailableMetadata(meta);
+  };
 
   const toggleMute = () => {
     const newState = !isMuted;
@@ -149,6 +190,37 @@ const App: React.FC = () => {
 
   const deselectAllLessons = () => {
     setSelectedLessons([]);
+  };
+
+  // Custom Editor Logic
+  const openCustomEditor = () => {
+    // Load current items and join them with newlines for editing
+    const items = getRawCustomItems();
+    setCustomBulkText(items.join('\n'));
+    setIsEditingCustom(true);
+  };
+
+  const closeCustomEditor = () => {
+    setIsEditingCustom(false);
+    setShowAiPrompt(false);
+    parseCorpusData(); // Refresh corpus with new data
+    refreshMetadata(); // Update filters UI
+  };
+
+  const handleSaveCustomWords = () => {
+    saveCustomCorpusFromText(customBulkText);
+    alert('自訂題庫已儲存！');
+    closeCustomEditor();
+  };
+  
+  const insertTone = (tone: string) => {
+    setCustomBulkText(prev => prev + tone);
+  };
+  
+  const copyAiPrompt = () => {
+      navigator.clipboard.writeText(activePromptTemplate).then(() => {
+          alert("提示詞已複製！請貼給 AI (ChatGPT/Claude) 生成題目。");
+      });
   };
 
   const isFilterValid = selectedPublishers.length > 0 && selectedGrades.length > 0 && selectedLessons.length > 0;
@@ -844,12 +916,106 @@ const App: React.FC = () => {
                 </div>
             )}
 
+            {/* AI PROMPT MODAL */}
+            {showAiPrompt && (
+                <div className="absolute inset-0 z-[60] bg-black/95 flex flex-col p-6 items-center justify-center">
+                    <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 w-full max-w-lg shadow-2xl flex flex-col h-5/6">
+                        <h3 className="text-xl font-bold text-blue-400 mb-4 text-center">🤖 AI 出題助手 (Prompt)</h3>
+                        
+                        {/* Toggle Tabs */}
+                        <div className="flex gap-2 mb-4 justify-center">
+                             <button 
+                                onClick={() => setActivePromptTemplate(AI_PROMPT_TEMPLATE_SENTENCE)}
+                                className={`px-4 py-2 rounded-t-lg text-sm font-bold border-b-2 ${activePromptTemplate === AI_PROMPT_TEMPLATE_SENTENCE ? 'border-blue-500 text-blue-300 bg-gray-700' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                             >
+                                填空模式
+                             </button>
+                             <button 
+                                onClick={() => setActivePromptTemplate(AI_PROMPT_TEMPLATE_VOCAB)}
+                                className={`px-4 py-2 rounded-t-lg text-sm font-bold border-b-2 ${activePromptTemplate === AI_PROMPT_TEMPLATE_VOCAB ? 'border-green-500 text-green-300 bg-gray-700' : 'border-transparent text-gray-500 hover:text-gray-300'}`}
+                             >
+                                生字造詞
+                             </button>
+                        </div>
+
+                        <p className="text-gray-300 text-sm mb-2 shrink-0">
+                            {activePromptTemplate === AI_PROMPT_TEMPLATE_SENTENCE 
+                              ? "請複製下方文字，並輸入主題 (如: 水果)，AI 會生成填充題。" 
+                              : "請複製下方文字，並貼上您的生字列表 (如: 樹、花)，AI 會自動造詞。"}
+                        </p>
+                        
+                        <textarea 
+                            readOnly
+                            className="flex-1 w-full bg-gray-900 border border-gray-700 rounded p-3 text-xs text-gray-300 font-mono mb-4 focus:outline-none resize-none"
+                            value={activePromptTemplate}
+                        />
+                        <div className="flex gap-3 justify-end shrink-0">
+                            <Button variant="outline" onClick={() => setShowAiPrompt(false)}>關閉</Button>
+                            <Button onClick={copyAiPrompt} className="bg-blue-600 hover:bg-blue-500">📋 複製提示詞</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CUSTOM EDITOR MODAL */}
+            {isEditingCustom && (
+              <div className="absolute inset-0 z-50 bg-black/95 flex flex-col p-6 overflow-hidden">
+                <div className="flex justify-between items-center mb-4 shrink-0">
+                  <h2 className="text-2xl font-bold text-green-400">✏️ 編輯自訂題庫</h2>
+                  <Button variant="outline" onClick={closeCustomEditor} className="text-sm">關閉</Button>
+                </div>
+
+                <div className="flex-1 flex flex-col bg-gray-800 p-4 rounded-xl overflow-hidden">
+                   <div className="mb-4 text-sm text-gray-300 bg-gray-900/50 p-3 rounded border border-gray-700 flex justify-between items-start">
+                      <div>
+                          <p className="font-bold mb-1">💡 快速輸入說明：</p>
+                          <ul className="list-disc pl-5 space-y-1 text-xs text-gray-400">
+                              <li>直接貼上大量題目，支援 <b>換行</b> 或 <b>分號</b> 分隔。</li>
+                              <li>格式：<code>紅(ㄏㄨㄥˊ)色</code> 或 <code>(紅)ㄏㄨㄥˊ色</code> 皆可。</li>
+                              <li>系統會自動判斷「目標字」與「注音」。</li>
+                          </ul>
+                      </div>
+                      <Button onClick={() => setShowAiPrompt(true)} className="text-xs px-3 py-1 bg-purple-600 hover:bg-purple-500 border-none">
+                          🤖 AI 出題助手
+                      </Button>
+                   </div>
+                   
+                   <textarea
+                      className="flex-1 w-full bg-gray-900 border border-gray-600 rounded p-4 text-white font-mono text-sm leading-relaxed resize-none focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="請在此輸入題目，例如：&#10;紅(ㄏㄨㄥˊ)色&#10;藍色(ㄙㄜˋ)&#10;白雲(ㄩㄣˊ)"
+                      value={customBulkText}
+                      onChange={(e) => setCustomBulkText(e.target.value)}
+                   />
+                   
+                   <div className="mt-4 flex gap-4 items-center">
+                        <div className="flex gap-2">
+                            {['ˊ', 'ˇ', 'ˋ', '˙'].map(tone => (
+                              <button key={tone} onClick={() => insertTone(tone)} className="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm">
+                                {tone}
+                              </button>
+                            ))}
+                        </div>
+                        <div className="flex-1"></div>
+                        <Button onClick={handleSaveCustomWords} className="bg-green-600 hover:bg-green-500 px-8">
+                           💾 儲存題庫
+                        </Button>
+                   </div>
+                </div>
+              </div>
+            )}
+
             {/* MENU STATE */}
-            {gameState === GameState.MENU && (
+            {gameState === GameState.MENU && !isEditingCustom && (
               <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
-                 {/* Filter Settings ... (Same as before) */}
+                 {/* Filter Settings */}
                 <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 backdrop-blur-sm w-full max-w-2xl mb-8">
-                  <h2 className="text-lg font-bold text-gray-300 mb-4 text-left border-l-4 border-blue-500 pl-3">題庫設定 (可複選)</h2>
+                  <div className="flex justify-between items-center mb-4 border-l-4 border-blue-500 pl-3">
+                     <h2 className="text-lg font-bold text-gray-300">題庫設定 (可複選)</h2>
+                     <Button onClick={openCustomEditor} variant="outline" className="text-xs px-2 py-1 h-auto border-green-500 text-green-400 hover:bg-green-900">
+                        ✏️ 編輯自訂題庫
+                     </Button>
+                  </div>
+                  
                   <div className="space-y-6">
                     <div className="text-left">
                       <h3 className="text-sm text-gray-400 mb-2">出版社版本</h3>
@@ -1045,10 +1211,6 @@ const App: React.FC = () => {
                     {/* Damage Numbers Overlay */}
                     {damageEffects.map(effect => {
                         // Render logic based on target and sign
-                        // Boss Damage: Yellow/White, always shown as number (usually positive input)
-                        // Player Damage: Red negative
-                        // Player Heal: Green positive
-                        
                         let text = '';
                         let colorClass = '';
                         let positionClass = '';
@@ -1247,6 +1409,20 @@ const App: React.FC = () => {
                 }
                 .animate-spin-slow {
                     animation: spin-slow 3s linear infinite;
+                }
+                /* Custom Scrollbar for list */
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 8px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: #1f2937;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background: #4b5563;
+                  border-radius: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background: #6b7280;
                 }
             `}</style>
           </main>
