@@ -21,6 +21,10 @@ class AudioManager {
 
   public setMute(mute: boolean) {
     this.isMuted = mute;
+    // Also cancel speech if muted
+    if (mute) {
+      this.cancelSpeak();
+    }
     if (this.bgmGain && this.ctx) {
       // Smooth fade
       const now = this.ctx.currentTime;
@@ -30,6 +34,28 @@ class AudioManager {
 
   public getMute() {
     return this.isMuted;
+  }
+
+  // Text-to-Speech
+  public speak(text: string) {
+    if (this.isMuted) return;
+    
+    // Cancel any current speech
+    this.cancelSpeak();
+
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-TW'; // Force Traditional Chinese (Taiwan)
+      utterance.rate = 0.85;    // Slightly slower for clarity
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+
+  public cancelSpeak() {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
   }
 
   // SFX: Light blip for typing

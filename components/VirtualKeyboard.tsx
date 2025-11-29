@@ -11,9 +11,9 @@ interface VirtualKeyboardProps {
 
 export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({ activeKey, pressedKey, showHints, onKeyPress }) => {
   return (
-    <div className="flex flex-col gap-2 p-4 bg-gray-800 rounded-xl shadow-2xl max-w-4xl mx-auto mt-8 select-none">
+    <div className="flex flex-col gap-1 p-2 bg-gray-800 rounded-lg shadow-xl max-w-4xl mx-auto select-none mt-0">
       {CORRECT_KEYBOARD_ROWS.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex justify-center gap-1.5 sm:gap-2">
+        <div key={rowIndex} className="flex justify-center gap-1 sm:gap-1.5">
           {row.map((keyConfig) => {
             const isTarget = showHints && activeKey === keyConfig.code;
             const isPressed = pressedKey === keyConfig.code;
@@ -34,19 +34,19 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({ activeKey, pre
                 onClick={() => onKeyPress(keyConfig.code)}
                 className={`
                   relative flex flex-col items-center justify-center 
-                  border-b-4 rounded-lg transition-all duration-100 cursor-pointer
+                  border-b-4 rounded transition-all duration-100 cursor-pointer
                   active:scale-95 active:border-b-0 active:translate-y-1 hover:brightness-110
                   ${bgClass}
-                  ${isSpace ? 'w-48 sm:w-64 md:w-80 h-10 sm:h-14 md:h-16' : 'w-8 h-10 sm:w-12 sm:h-14 md:w-14 md:h-16'}
+                  ${isSpace ? 'w-48 sm:w-64 md:w-80 h-8 sm:h-10 md:h-12' : 'w-8 h-9 sm:w-10 sm:h-12 md:w-12 md:h-14'}
                 `}
               >
                 {/* Zhuyin Main Label */}
-                <span className={`text-sm sm:text-lg md:text-xl font-bold ${isTarget ? 'text-white' : 'text-gray-100'}`}>
+                <span className={`text-sm sm:text-base md:text-lg font-bold ${isTarget ? 'text-white' : 'text-gray-100'}`}>
                   {keyConfig.label}
                 </span>
                 
                 {/* English Key Sub-label */}
-                <span className={`absolute top-0.5 right-1 text-[8px] sm:text-[10px] font-mono ${isTarget ? 'text-blue-100' : 'text-gray-400'}`}>
+                <span className={`absolute top-0.5 right-1 text-[7px] sm:text-[9px] font-mono ${isTarget ? 'text-blue-100' : 'text-gray-400'}`}>
                   {keyConfig.subLabel === 'Space' ? 'SPACE' : keyConfig.subLabel.toUpperCase()}
                 </span>
               </div>

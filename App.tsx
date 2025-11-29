@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [lastPressedKey, setLastPressedKey] = useState<string | null>(null);
   const [showHint, setShowHint] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false); // New: Voice Toggle
   
   // Timer for Mode 2
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,6 +83,14 @@ const App: React.FC = () => {
     const newState = !isMuted;
     setIsMuted(newState);
     audioManager.setMute(newState);
+  };
+
+  const toggleVoice = () => {
+    const newState = !isVoiceEnabled;
+    setIsVoiceEnabled(newState);
+    if (!newState) {
+      audioManager.cancelSpeak();
+    }
   };
 
   const togglePause = useCallback(() => {
@@ -397,6 +406,19 @@ const App: React.FC = () => {
   const currentChar = currentWord?.chars[charIndex];
   const currentTargetKey = currentChar?.keys[keyIndex];
 
+  // Voice Logic: Speak when word changes
+  useEffect(() => {
+    if (gameState === GameState.PLAYING && isVoiceEnabled && currentWord) {
+      // Reconstruct the full display text from chars
+      const text = currentWord.chars.map(c => c.char).join('');
+      // Delay slightly to avoid conflict with "Correct" sound of previous word
+      setTimeout(() => {
+        audioManager.speak(text);
+      }, 300);
+    }
+  }, [vocabIndex, isVoiceEnabled, gameState, currentWord]);
+
+
   const handleInput = useCallback((inputKey: string) => {
       // Input Blockers
       if (gameState === GameState.PAUSED) return;
@@ -518,25 +540,13 @@ const App: React.FC = () => {
   }, [bossHp, playerStats.hp, gameState, isExploding, wave]);
 
 
-  // Render Helpers
+  // Compact Render Helper for the Battle Box
   const renderCurrentWordDisplay = () => {
     if (!currentWord) return null;
 
     return (
-      <div className="flex flex-col items-center relative z-10">
-        <div className="mb-4 flex gap-2">
-           <span className="bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded-full border border-gray-600">
-             {currentWord.publisher}
-           </span>
-           <span className="bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded-full border border-gray-600">
-             {currentWord.grade}
-           </span>
-           <span className="bg-blue-900/50 text-blue-200 text-xs px-2 py-1 rounded-full border border-blue-800">
-             {currentWord.lesson}
-           </span>
-        </div>
-
-        <div className="flex justify-center items-end gap-2 mb-8 min-h-[140px] flex-wrap">
+      <div className="flex flex-col items-center justify-center h-full w-full relative z-10 px-2">
+        <div className="flex justify-center items-end gap-1 flex-wrap">
           {currentWord.chars.map((charData, idx) => {
             const isContext = charData.isContext;
             const isPast = idx < charIndex && !isContext;
@@ -551,42 +561,39 @@ const App: React.FC = () => {
 
             if (isContext) {
               return (
-                <div key={idx} className="flex flex-col items-center justify-end pb-5 mx-1">
-                    <span className="text-4xl text-gray-400 font-bold">{charData.char}</span>
+                <div key={idx} className="flex flex-col items-center justify-end pb-3 mx-0.5">
+                    <span className="text-2xl sm:text-3xl text-gray-800 font-bold">{charData.char}</span>
                 </div>
               );
             }
             
             return (
-              <div key={idx} className={`flex flex-col items-center transition-all duration-300 ${isCurrent ? 'scale-110' : 'opacity-60 scale-95'}`}>
+              <div key={idx} className={`flex flex-col items-center transition-all duration-300 ${isCurrent ? 'scale-110' : 'opacity-80 scale-100'}`}>
                 <div className={`
-                      text-xl font-medium text-blue-300 mb-2 min-h-[80px] w-8 flex flex-col justify-end items-center writing-vertical-lr
+                      text-lg font-extrabold text-black mb-1 w-6 flex flex-col justify-end items-center writing-vertical-lr
                       transition-opacity duration-300
                       ${showZhuyinText ? 'opacity-100' : 'opacity-0'}
                 `}>
                     {charData.zhuyin.split('').map((z, zIdx) => (
-                        <span key={zIdx} className="block py-0.5">{z}</span>
+                        <span key={zIdx} className="block leading-none">{z}</span>
                     ))}
                 </div>
                 
                 {/* Memory Hint Timer Overlay */}
                 {!showZhuyinText && isCurrent && (
-                    <div className="absolute top-0 text-xs text-yellow-500 font-mono animate-pulse">
-                        {timeUntilHint}s
+                    <div className="absolute top-0 text-[10px] text-red-500 font-mono animate-pulse">
+                        {timeUntilHint}
                     </div>
                 )}
 
                 <div className={`
-                  text-5xl font-bold rounded-lg p-4 border-2 min-w-[80px] text-center
-                  ${isCurrent ? 'bg-gray-700 border-blue-500 text-white shadow-lg shadow-blue-500/20' : ''}
-                  ${isPast ? 'bg-green-900/30 border-green-600 text-green-400' : ''}
-                  ${!isCurrent && !isPast ? 'bg-gray-800 border-gray-700 text-gray-500' : ''}
+                  text-2xl sm:text-3xl font-bold rounded-md px-2 py-1 border-2 min-w-[40px] text-center shadow-sm
+                  ${isCurrent ? 'bg-blue-100 border-blue-500 text-black shadow-md' : ''}
+                  ${isPast ? 'bg-green-100 border-green-500 text-green-700' : ''}
+                  ${!isCurrent && !isPast ? 'bg-white border-gray-400 text-gray-400' : ''}
                 `}>
                   {charData.char}
                 </div>
-                {isCurrent && (
-                    <div className="mt-2 h-2 w-2 rounded-full bg-blue-500 animate-ping"></div>
-                )}
               </div>
             );
           })}
@@ -596,200 +603,262 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center p-4 overflow-hidden relative font-sans">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center overflow-hidden relative font-sans">
       
       {/* Background Decor */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-800 to-gray-900 -z-10"></div>
 
-      {/* Header */}
-      <header className="w-full max-w-4xl flex justify-between items-center py-4 border-b border-gray-800 mb-4 z-20">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent cursor-pointer" onClick={() => { setGameState(GameState.MENU); audioManager.stopBGM(); }}>
-          ㄅㄆㄇ注音大師 <span className="text-xs text-gray-500 ml-2">Roguelike Edition</span>
-        </h1>
-        <div className="flex items-center gap-4">
-             {/* Pause Button */}
-            {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
-                <button 
-                    onClick={togglePause}
-                    className="p-2 rounded-full bg-gray-700 border border-gray-600 hover:bg-gray-600 transition-all text-xl w-10 h-10 flex items-center justify-center"
-                    title="暫停"
-                >
-                    {gameState === GameState.PAUSED ? '▶' : '⏸'}
+      {/* Main Container */}
+      <div className="w-full max-w-3xl flex flex-col h-screen max-h-screen">
+          
+          {/* Header (Minimal) */}
+          <header className="flex justify-between items-center py-2 px-4 border-b border-gray-800 bg-gray-900 z-20 shrink-0">
+            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent cursor-pointer" onClick={() => { setGameState(GameState.MENU); audioManager.stopBGM(); }}>
+              ㄅㄆㄇ大師
+            </h1>
+            <div className="flex items-center gap-2">
+                {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
+                    <button onClick={togglePause} className="text-gray-400 hover:text-white px-2 text-sm border border-gray-700 rounded bg-gray-800">{gameState === GameState.PAUSED ? '▶' : '||'}</button>
+                )}
+                <button onClick={toggleVoice} className={`text-xs px-2 py-1 rounded border ${isVoiceEnabled ? 'bg-blue-900 border-blue-500 text-blue-200' : 'bg-gray-800 border-gray-600 text-gray-500'}`}>
+                    {isVoiceEnabled ? '朗讀開啟' : '朗讀關閉'}
                 </button>
+                <button onClick={toggleMute} className="text-lg">
+                    {isMuted ? '🔇' : '🔊'}
+                </button>
+            </div>
+          </header>
+
+          {/* GAME CONTENT */}
+          <main className="flex-1 flex flex-col relative w-full overflow-hidden">
+            
+            {/* Loading Overlay */}
+            {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50">
+                    <div className="text-2xl font-bold text-blue-400 animate-pulse">載入中...</div>
+                </div>
             )}
 
-            <button 
-                onClick={toggleMute} 
-                className={`p-2 rounded-full border ${isMuted ? 'bg-red-900/50 border-red-700 text-red-300' : 'bg-green-900/50 border-green-700 text-green-300'} transition-all`}
-            >
-                {isMuted ? '🔇' : '🔊'}
-            </button>
-            {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
-            <div className="flex gap-4 text-sm font-mono items-center hidden sm:flex">
-                <div className="bg-yellow-900/40 border border-yellow-700 text-yellow-200 px-3 py-1 rounded">
-                    第 {wave} 波
-                </div>
-                <div className="bg-gray-800 px-3 py-1 rounded">得分: <span className="text-green-400">{score}</span></div>
-                <div className="bg-gray-800 px-3 py-1 rounded">錯誤: <span className="text-red-400">{errors}</span></div>
-            </div>
-            )}
-        </div>
-      </header>
-
-      <main className="flex-1 w-full max-w-4xl flex flex-col items-center justify-start relative z-10">
-        
-        {/* Loading */}
-        {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-50">
-                <div className="text-2xl font-bold text-blue-400 animate-pulse">載入中...</div>
-            </div>
-        )}
-
-        {/* MENU STATE */}
-        {gameState === GameState.MENU && (
-          <div className="text-center space-y-8 animate-fade-in w-full max-w-2xl py-4">
-             {/* Filter Settings ... (Same as before) */}
-            <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 backdrop-blur-sm">
-              <h2 className="text-lg font-bold text-gray-300 mb-4 text-left border-l-4 border-blue-500 pl-3">題庫設定 (可複選)</h2>
-              <div className="space-y-6">
-                <div className="text-left">
-                  <h3 className="text-sm text-gray-400 mb-2">出版社版本</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {availableMetadata.publishers.map(pub => (
-                      <button key={pub} onClick={() => togglePublisher(pub)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedPublishers.includes(pub) ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{pub}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-left">
-                  <h3 className="text-sm text-gray-400 mb-2">年級</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {availableMetadata.grades.map(grade => (
-                      <button key={grade} onClick={() => toggleGrade(grade)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedGrades.includes(grade) ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{grade}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="text-left">
-                  <div className="flex justify-between items-end mb-2">
-                    <h3 className="text-sm text-gray-400">課次範圍</h3>
-                    <div className="space-x-2">
-                      <button onClick={selectAllLessons} className="text-xs text-blue-400 hover:text-blue-300">全選</button>
-                      <button onClick={deselectAllLessons} className="text-xs text-gray-500 hover:text-gray-400">取消全選</button>
+            {/* MENU STATE */}
+            {gameState === GameState.MENU && (
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center">
+                 {/* Filter Settings ... (Same as before) */}
+                <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 backdrop-blur-sm w-full max-w-2xl mb-8">
+                  <h2 className="text-lg font-bold text-gray-300 mb-4 text-left border-l-4 border-blue-500 pl-3">題庫設定 (可複選)</h2>
+                  <div className="space-y-6">
+                    <div className="text-left">
+                      <h3 className="text-sm text-gray-400 mb-2">出版社版本</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {availableMetadata.publishers.map(pub => (
+                          <button key={pub} onClick={() => togglePublisher(pub)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedPublishers.includes(pub) ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{pub}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-sm text-gray-400 mb-2">年級</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {availableMetadata.grades.map(grade => (
+                          <button key={grade} onClick={() => toggleGrade(grade)} className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${selectedGrades.includes(grade) ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{grade}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-left">
+                      <div className="flex justify-between items-end mb-2">
+                        <h3 className="text-sm text-gray-400">課次範圍</h3>
+                        <div className="space-x-2">
+                          <button onClick={selectAllLessons} className="text-xs text-blue-400 hover:text-blue-300">全選</button>
+                          <button onClick={deselectAllLessons} className="text-xs text-gray-500 hover:text-gray-400">取消全選</button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-40 overflow-y-auto custom-scrollbar">
+                        {availableMetadata.lessons.map(lesson => (
+                          <button key={lesson} onClick={() => toggleLesson(lesson)} className={`px-2 py-2 rounded-lg text-sm font-medium transition-all truncate ${selectedLessons.includes(lesson) ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{lesson}</button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-40 overflow-y-auto custom-scrollbar">
-                    {availableMetadata.lessons.map(lesson => (
-                      <button key={lesson} onClick={() => toggleLesson(lesson)} className={`px-2 py-2 rounded-lg text-sm font-medium transition-all truncate ${selectedLessons.includes(lesson) ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-400'}`}>{lesson}</button>
-                    ))}
+                </div>
+
+                <div className="space-y-4 w-full max-w-2xl">
+                  <h2 className="text-2xl font-bold mb-2 text-center">選擇遊戲模式</h2>
+                  <div className="grid md:grid-cols-2 gap-6 w-full">
+                    <div className={`group bg-gray-800 hover:bg-gray-750 p-6 rounded-2xl border border-gray-700 hover:border-blue-500 transition-all cursor-pointer relative overflow-hidden text-left ${!isFilterValid ? 'opacity-50 grayscale' : ''}`} onClick={() => startGame(GameMode.LEARNING)}>
+                      <h3 className="text-2xl font-bold text-blue-400 mb-2">練習模式</h3>
+                      <p className="text-gray-300 text-sm">無限挑戰，每3波可選技能</p>
+                    </div>
+                    <div className={`group bg-gray-800 hover:bg-gray-750 p-6 rounded-2xl border border-gray-700 hover:border-purple-500 transition-all cursor-pointer relative overflow-hidden text-left ${!isFilterValid ? 'opacity-50 grayscale' : ''}`} onClick={() => startGame(GameMode.MEMORY)}>
+                      <h3 className="text-2xl font-bold text-purple-400 mb-2">測驗模式</h3>
+                      <p className="text-gray-300 text-sm">無限挑戰，每3波可選技能 (隱藏注音)</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold mb-2">選擇遊戲模式</h2>
-              <div className="grid md:grid-cols-2 gap-6 w-full">
-                <div className={`group bg-gray-800 hover:bg-gray-750 p-6 rounded-2xl border border-gray-700 hover:border-blue-500 transition-all cursor-pointer relative overflow-hidden text-left ${!isFilterValid ? 'opacity-50 grayscale' : ''}`} onClick={() => startGame(GameMode.LEARNING)}>
-                  <h3 className="text-2xl font-bold text-blue-400 mb-2">練習模式</h3>
-                  <p className="text-gray-300 text-sm">無限挑戰，每3波可選技能</p>
-                </div>
-                <div className={`group bg-gray-800 hover:bg-gray-750 p-6 rounded-2xl border border-gray-700 hover:border-purple-500 transition-all cursor-pointer relative overflow-hidden text-left ${!isFilterValid ? 'opacity-50 grayscale' : ''}`} onClick={() => startGame(GameMode.MEMORY)}>
-                  <h3 className="text-2xl font-bold text-purple-400 mb-2">測驗模式</h3>
-                  <p className="text-gray-300 text-sm">無限挑戰，每3波可選技能 (隱藏注音)</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            {/* PLAYING / PAUSED STATE (POKEMON BATTLE STYLE) */}
+            {(gameState === GameState.PLAYING || gameState === GameState.CHOOSING_SKILL || gameState === GameState.PAUSED) && (
+              <div className="flex flex-col h-full w-full">
+                
+                {/* 1. BATTLE SCENE (Top Half) */}
+                <div className="relative w-full h-48 sm:h-64 bg-gray-800 border-b-4 border-black overflow-hidden shrink-0">
+                    {/* Background Floor */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-gray-700 to-gray-800"></div>
+                    <div className="absolute bottom-0 w-full h-1/3 bg-gray-600 skew-x-12 origin-bottom-left opacity-30"></div>
 
-        {/* PLAYING / PAUSED STATE */}
-        {(gameState === GameState.PLAYING || gameState === GameState.CHOOSING_SKILL || gameState === GameState.PAUSED) && (
-          <div className="w-full flex flex-col items-center animate-fade-in relative h-full">
-            
-            {/* BOSS SECTION */}
-            <div className="w-full flex flex-col items-center mb-6 relative mt-4">
-                {/* Boss HP */}
-                <div className="w-full max-w-md h-6 bg-gray-800 rounded-full border border-gray-600 overflow-hidden relative shadow-lg">
-                    <div 
-                        className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all duration-300 ease-out"
-                        style={{ width: `${(bossHp / bossMaxHp) * 100}%` }}
-                    ></div>
-                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                         {currentBoss.name}: {Math.ceil(bossHp)} / {bossMaxHp}
-                    </span>
-                </div>
-
-                {/* Boss Avatar & Animation */}
-                <div className="relative mt-2">
-                    {isExploding ? (
-                        <div className="text-8xl animate-[explosion_0.8s_ease-out_forwards] z-40">
-                            💥
+                    {/* --- OPPONENT (BOSS) --- */}
+                    {/* Boss HP Box (Top Left) */}
+                    <div className="absolute top-2 left-2 z-20 bg-gray-100 border-2 border-gray-600 rounded p-1 px-2 shadow-lg min-w-[120px]">
+                        <div className="flex justify-between items-baseline mb-1">
+                            <span className="text-xs font-bold text-black uppercase">{currentBoss.name}</span>
+                            <span className="text-xs font-bold text-black">Lv.{wave * 5}</span>
                         </div>
-                    ) : (
-                        <div className={`
-                            text-8xl transition-transform duration-300
-                            ${isBossShaking ? 'translate-x-1 translate-y-1 rotate-3' : ''}
-                            ${isBossAttacking ? 'scale-125 translate-y-8 z-50' : ''}
-                        `}>
-                            {currentBoss.emoji}
+                        <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden border border-gray-400 relative">
+                             <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(bossHp / bossMaxHp) * 100}%` }}></div>
                         </div>
-                    )}
+                        {/* Attack Bar */}
+                        {!isExploding && (
+                            <div className="mt-0.5 w-full h-1 bg-gray-300 rounded-full overflow-hidden">
+                                <div className={`h-full transition-all duration-100 ${enemyAttackProgress > 90 ? 'bg-yellow-500 animate-pulse' : 'bg-orange-300'}`} style={{ width: `${enemyAttackProgress}%` }}></div>
+                            </div>
+                        )}
+                    </div>
 
-                    {/* Enemy Attack Bar */}
-                    {!isExploding && (
-                        <div className="absolute -bottom-4 left-0 w-full h-2 bg-gray-700 rounded-full overflow-hidden mt-1 opacity-80">
-                            <div 
-                                className={`h-full transition-all duration-100 ${enemyAttackProgress > 90 ? 'bg-red-500 animate-pulse' : 'bg-orange-400'}`}
-                                style={{ width: `${enemyAttackProgress}%` }}
-                            ></div>
+                    {/* Boss Avatar (Top Right Area) */}
+                    <div className="absolute top-2 sm:top-8 right-4 sm:right-8 z-10 flex flex-col items-center">
+                         {isExploding ? (
+                            <div className="text-8xl animate-[explosion_0.8s_ease-out_forwards]">💥</div>
+                        ) : (
+                            <div className={`text-6xl sm:text-8xl transition-transform duration-300 drop-shadow-2xl ${isBossShaking ? 'translate-x-1 translate-y-1 rotate-3' : ''} ${isBossAttacking ? 'scale-125 translate-y-8 z-50' : ''}`}>
+                                {currentBoss.emoji}
+                            </div>
+                        )}
+                        {/* Boss Platform */}
+                        <div className="w-24 h-6 bg-gray-900/40 rounded-[50%] blur-sm mt-[-10px]"></div>
+                    </div>
+
+                    {/* --- PLAYER (PROTAGONIST) --- */}
+                    {/* Player Avatar (Bottom Left Area) */}
+                    <div className="absolute bottom-0 left-8 z-10 flex flex-col items-center">
+                        <div className="text-6xl sm:text-7xl drop-shadow-2xl transform scale-x-[-1]">
+                            😊
                         </div>
-                    )}
-                    
-                    {/* Damage Numbers */}
+                         {/* Player Platform */}
+                         <div className="w-20 h-6 bg-gray-900/40 rounded-[50%] blur-sm mt-[-5px]"></div>
+                    </div>
+
+                    {/* Player HP Box (Bottom Right) */}
+                    <div className="absolute bottom-4 sm:bottom-6 right-2 z-20 bg-gray-100 border-2 border-gray-600 rounded p-1 px-2 shadow-lg min-w-[120px]">
+                        <div className="flex justify-between items-baseline mb-1">
+                            <span className="text-xs font-bold text-black uppercase">PLAYER</span>
+                            <span className="text-xs font-bold text-black">{Math.ceil(playerStats.hp)}/{playerStats.maxHp}</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-300 rounded-full overflow-hidden border border-gray-400">
+                             <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${(playerStats.hp / playerStats.maxHp) * 100}%` }}></div>
+                        </div>
+                        <div className="text-[10px] text-gray-500 text-right mt-0.5">Exp: {score}</div>
+                    </div>
+
+                    {/* Damage Numbers Overlay */}
                     {damageEffects.map(effect => (
-                        <div 
-                            key={effect.id}
-                            className={`
-                                absolute left-1/2 top-1/2 pointer-events-none font-bold select-none
-                                animate-[floatUp_0.8s_ease-out_forwards]
-                                ${effect.target === 'BOSS' 
-                                    ? (effect.isCritical ? 'text-4xl text-yellow-400 z-50' : 'text-2xl text-white z-40')
-                                    : 'text-3xl text-red-500 z-50' // Player damage color
-                                }
-                            `}
-                            style={{ 
-                                transform: `translate(-50%, -50%) translate(${effect.x}px, ${effect.y}px)`,
-                                textShadow: '2px 2px 0px #000'
-                            }}
-                        >
-                            {effect.target === 'BOSS' ? '-' : '-'}{Math.floor(effect.value)}
-                            {effect.isCritical && '!'}
+                        <div key={effect.id} className={`absolute font-bold select-none animate-[floatUp_0.8s_ease-out_forwards] ${effect.target === 'BOSS' ? (effect.isCritical ? 'text-4xl text-yellow-400 left-3/4 top-1/3' : 'text-2xl text-white left-3/4 top-1/3') : 'text-3xl text-red-500 left-1/4 bottom-1/3'}`} style={{ transform: `translate(${effect.x}px, ${effect.y}px)`, textShadow: '2px 2px 0px #000' }}>
+                            {effect.target === 'BOSS' ? '-' : '-'}{Math.floor(effect.value)} {effect.isCritical && '!'}
                         </div>
                     ))}
+                    
+                    {/* Projectiles */}
+                    {projectiles.map(p => (
+                        <div key={p.id} className="absolute w-4 h-4 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa] z-30 pointer-events-none" style={{ left: '20%', bottom: '20%', animation: 'shootProjectile 0.4s ease-in forwards' }}></div>
+                    ))}
                 </div>
-            </div>
 
-            {/* COMBAT PROJECTILES */}
-            {projectiles.map(p => (
-                <div
-                    key={p.id}
-                    className="absolute w-4 h-4 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa] z-30 pointer-events-none"
-                    style={{
-                        left: '50%',
-                        bottom: '250px',
-                        animation: 'shootProjectile 0.4s ease-in forwards'
-                    }}
-                ></div>
-            ))}
+                {/* 2. COMMAND DECK (Middle Section - The "White Box" & Controls) */}
+                <div className="w-full bg-gray-900 flex flex-col sm:flex-row gap-2 p-2 shrink-0">
+                    {/* Left: The "Question Box" */}
+                    <div className="flex-1 bg-white border-4 border-gray-600 rounded-lg p-2 min-h-[100px] flex items-center relative shadow-inner">
+                        <div className="absolute top-1 left-2 text-xs text-gray-400">
+                             {currentWord ? `${currentWord.publisher} | ${currentWord.lesson}` : ''}
+                        </div>
+                        {renderCurrentWordDisplay()}
+                        {/* Triangle cursor indicator at bottom right to mimic RPG text box */}
+                        <div className="absolute bottom-2 right-2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-red-500 animate-bounce"></div>
+                    </div>
 
+                    {/* Right: Info/Stats Panel (Compact) */}
+                    <div className="w-full sm:w-32 bg-gray-800 border-2 border-gray-600 rounded-lg p-2 flex flex-row sm:flex-col justify-between items-center text-xs sm:text-sm">
+                        <div className="flex flex-col items-center">
+                            <span className="text-gray-400">WAVE</span>
+                            <span className="text-yellow-400 font-bold text-xl">{wave}</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-gray-400">ERROR</span>
+                            <span className="text-red-400 font-bold text-xl">{errors}</span>
+                        </div>
+                         <Button variant="outline" className="text-xs px-2 py-1 h-auto" onClick={() => { setGameState(GameState.MENU); audioManager.stopBGM(); }}>
+                            逃跑
+                        </Button>
+                    </div>
+                </div>
+
+                {/* 3. INPUT AREA (Bottom Section - Keyboard) */}
+                <div className="flex-1 bg-gray-900 px-1 pb-1 flex items-start justify-center overflow-y-auto">
+                    <VirtualKeyboard 
+                      activeKey={currentTargetKey || null}
+                      pressedKey={lastPressedKey}
+                      showHints={showHint}
+                      onKeyPress={handleInput}
+                    />
+                </div>
+              </div>
+            )}
+
+            {/* OVERLAYS (Pause, Skills, Game Over) */}
+            {gameState === GameState.PAUSED && (
+                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                    <h2 className="text-4xl font-bold text-white mb-8">遊戲暫停</h2>
+                    <div className="flex flex-col gap-4 w-64 mb-10">
+                        <Button onClick={togglePause} className="w-full bg-green-600 hover:bg-green-500 text-lg">▶ 繼續遊戲</Button>
+                        <Button onClick={() => startGame(gameMode)} className="w-full bg-blue-600 hover:bg-blue-500">↻ 重新遊戲</Button>
+                        <Button onClick={() => setGameState(GameState.MENU)} className="w-full bg-gray-600 hover:bg-gray-500">⌂ 返回主頁</Button>
+                    </div>
+                </div>
+            )}
+
+            {gameState === GameState.CHOOSING_SKILL && (
+                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                    <h2 className="text-3xl font-bold text-white mb-2">升級！選擇技能</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-4xl mt-4">
+                        {skillCandidates.map(skill => (
+                            <div key={skill.id} className={`cursor-pointer p-4 rounded-xl border-2 transition-all hover:scale-105 flex flex-col items-center text-center ${skill.rarity === 'COMMON' ? 'bg-gray-800 border-gray-600' : skill.rarity === 'RARE' ? 'bg-blue-900/50 border-blue-600' : 'bg-purple-900/50 border-purple-600'}`} onClick={() => selectSkill(skill)}>
+                                <div className="text-xs font-bold mb-1 opacity-70">{skill.rarity}</div>
+                                <h3 className="text-lg font-bold mb-2">{skill.name}</h3>
+                                <p className="text-sm text-gray-300">{skill.description}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {gameState === GameState.FINISHED && (
+               <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-8">
+                  <h2 className="text-5xl font-bold text-red-500 mb-4">GAME OVER</h2>
+                  <p className="text-gray-300 mb-8 text-xl">你在第 {wave} 波倒下了。</p>
+                  <div className="flex gap-4">
+                      <Button onClick={() => setGameState(GameState.MENU)}>回主選單</Button>
+                      <Button variant="secondary" onClick={() => startGame(gameMode)}>再次挑戰</Button>
+                  </div>
+               </div>
+            )}
+            
+            {/* CSS Animations */}
             <style>{`
                 @keyframes floatUp {
-                    0% { opacity: 1; margin-top: 0; transform: translate(-50%, -50%) scale(0.5); }
-                    20% { transform: translate(-50%, -50%) scale(1.2); }
-                    100% { opacity: 0; margin-top: -100px; transform: translate(-50%, -50%) scale(1); }
+                    0% { opacity: 1; margin-top: 0; transform: scale(0.5); }
+                    20% { transform: scale(1.2); }
+                    100% { opacity: 0; margin-top: -50px; transform: scale(1); }
                 }
                 @keyframes shootProjectile {
-                    0% { transform: translateY(0) scale(1); opacity: 1; }
-                    100% { transform: translateY(-300px) scale(0.5); opacity: 0; }
+                    0% { transform: translate(0,0) scale(1); opacity: 1; }
+                    100% { transform: translate(150px, -150px) scale(0.5); opacity: 0; }
                 }
                 @keyframes explosion {
                     0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
@@ -797,144 +866,8 @@ const App: React.FC = () => {
                     100% { transform: scale(2) rotate(-15deg); opacity: 0; }
                 }
             `}</style>
-
-            {/* QUESTION DISPLAY */}
-            {renderCurrentWordDisplay()}
-
-            {/* PLAYER STATUS BAR (Moved here) */}
-            <div className="w-full max-w-2xl mb-4 flex items-center gap-4 z-20 px-4">
-                 <div className="w-12 h-12 rounded-full bg-green-600 flex items-center justify-center text-2xl shadow-lg border-2 border-green-400 shrink-0">
-                    😊
-                </div>
-                <div className="flex-1 flex flex-col">
-                    <div className="w-full h-6 bg-gray-900 rounded-full border border-gray-600 overflow-hidden relative">
-                         <div className="h-full bg-green-500 transition-all duration-300" style={{ width: `${(playerStats.hp / playerStats.maxHp) * 100}%` }}></div>
-                         <span className="absolute inset-0 text-xs flex items-center justify-center font-bold drop-shadow">
-                            HP: {Math.ceil(playerStats.hp)} / {playerStats.maxHp}
-                         </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* VIRTUAL KEYBOARD */}
-            <div className="relative z-10 w-full">
-                <VirtualKeyboard 
-                  activeKey={currentTargetKey || null}
-                  pressedKey={lastPressedKey}
-                  showHints={showHint}
-                  onKeyPress={handleInput}
-                />
-            </div>
-            
-             <Button 
-                variant="outline" 
-                className="mt-8 text-sm py-2 px-4 border-gray-700 hover:bg-red-900/20 hover:border-red-500 hover:text-red-400 z-10 opacity-60 hover:opacity-100"
-                onClick={() => { setGameState(GameState.MENU); audioManager.stopBGM(); }}
-            >
-                放棄遊戲
-            </Button>
-          </div>
-        )}
-
-        {/* PAUSE MENU OVERLAY */}
-        {gameState === GameState.PAUSED && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4">
-                <h2 className="text-4xl font-bold text-white mb-8">遊戲暫停</h2>
-                
-                <div className="flex flex-col gap-4 w-64 mb-10">
-                    <Button onClick={togglePause} className="w-full bg-green-600 hover:bg-green-500 text-lg">
-                        ▶ 繼續遊戲
-                    </Button>
-                    <Button onClick={() => startGame(gameMode)} className="w-full bg-blue-600 hover:bg-blue-500">
-                        ↻ 重新遊戲
-                    </Button>
-                    <Button onClick={() => setGameState(GameState.MENU)} className="w-full bg-gray-600 hover:bg-gray-500">
-                        ⌂ 返回主頁
-                    </Button>
-                </div>
-
-                {/* Acquired Skills View */}
-                <div className="w-full max-w-4xl">
-                     <h3 className="text-xl text-gray-400 mb-4 border-b border-gray-700 pb-2 text-center">已獲得技能</h3>
-                     {acquiredSkills.length === 0 ? (
-                         <p className="text-gray-500 text-center">尚未獲得任何技能</p>
-                     ) : (
-                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[30vh] overflow-y-auto p-2">
-                             {acquiredSkills.map((skill, idx) => (
-                                 <div key={idx} className={`p-3 rounded-lg border bg-gray-800/50 text-left ${
-                                    skill.rarity === 'COMMON' ? 'border-gray-600' :
-                                    skill.rarity === 'RARE' ? 'border-blue-600 text-blue-100' :
-                                    'border-purple-600 text-purple-100'
-                                 }`}>
-                                     <div className="text-xs font-bold opacity-70 mb-1">{skill.rarity}</div>
-                                     <div className="font-bold">{skill.name}</div>
-                                     <div className="text-xs text-gray-400 mt-1">{skill.description}</div>
-                                 </div>
-                             ))}
-                         </div>
-                     )}
-                </div>
-            </div>
-        )}
-
-        {/* SKILL SELECTION MODAL */}
-        {gameState === GameState.CHOOSING_SKILL && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4">
-                <h2 className="text-3xl font-bold text-white mb-2">選擇一個技能</h2>
-                <p className="text-gray-400 mb-8">準備迎接下一波挑戰！</p>
-                <div className="grid md:grid-cols-3 gap-6 w-full max-w-4xl">
-                    {skillCandidates.map(skill => (
-                        <div 
-                            key={skill.id}
-                            className={`
-                                cursor-pointer p-6 rounded-xl border-2 transition-all hover:scale-105
-                                flex flex-col items-center text-center
-                                ${skill.rarity === 'COMMON' ? 'bg-gray-800 border-gray-600 hover:border-gray-400' : ''}
-                                ${skill.rarity === 'RARE' ? 'bg-blue-900/50 border-blue-600 hover:border-blue-400' : ''}
-                                ${skill.rarity === 'EPIC' ? 'bg-purple-900/50 border-purple-600 hover:border-purple-400' : ''}
-                            `}
-                            onClick={() => selectSkill(skill)}
-                        >
-                            <div className="text-sm font-bold mb-2 uppercase tracking-widest opacity-70">{skill.rarity}</div>
-                            <h3 className="text-2xl font-bold mb-3">{skill.name}</h3>
-                            <p className="text-gray-300">{skill.description}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        {/* FINISHED STATE (GAME OVER) */}
-        {gameState === GameState.FINISHED && (
-           <div className="text-center bg-gray-800 p-10 rounded-2xl border border-gray-700 shadow-2xl animate-fade-in z-50">
-              <h2 className="text-4xl font-bold text-red-500 mb-2">
-                  GAME OVER
-              </h2>
-              <p className="text-gray-400 mb-6 text-lg">你在第 <span className="text-white font-bold">{wave}</span> 波被 <span className={currentBoss.colorClass}>{currentBoss.name}</span> 擊敗了。</p>
-              
-              <div className="grid grid-cols-2 gap-8 mb-8">
-                  <div className="flex flex-col items-center">
-                      <span className="text-gray-400 text-sm uppercase tracking-wider">最終得分</span>
-                      <span className="text-4xl font-bold text-green-400">{score}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                      <span className="text-gray-400 text-sm uppercase tracking-wider">存活波數</span>
-                      <span className="text-4xl font-bold text-blue-400">{wave}</span>
-                  </div>
-              </div>
-
-              <div className="flex gap-4 justify-center">
-                  <Button onClick={() => setGameState(GameState.MENU)}>
-                      回主選單
-                  </Button>
-                  <Button variant="secondary" onClick={() => startGame(gameMode)}>
-                      再次挑戰
-                  </Button>
-              </div>
-           </div>
-        )}
-
-      </main>
+          </main>
+      </div>
     </div>
   );
 };
