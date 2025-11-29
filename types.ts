@@ -12,6 +12,12 @@ export enum GameState {
   FINISHED = 'FINISHED',
 }
 
+export enum Difficulty {
+  EASY = 'EASY',
+  NORMAL = 'NORMAL',
+  HARD = 'HARD'
+}
+
 export interface ZhuyinChar {
   char: string;
   zhuyin: string; // e.g., "ㄊ一ˊ"
@@ -48,6 +54,7 @@ export interface DamageEffect {
   y: number;
   isCritical: boolean;
   target: 'BOSS' | 'PLAYER'; // Who took damage
+  label?: string; // New: For text effects like "Speed!" or "Perfect!"
 }
 
 export interface Projectile {
@@ -56,6 +63,7 @@ export interface Projectile {
   startY: number;
   targetX: number;
   targetY: number;
+  variant: PlayerClassType; // Visual style based on class
 }
 
 // Roguelike Specific Types
@@ -65,6 +73,12 @@ export enum BuffType {
   ATTACK_UP = 'ATTACK_UP',
   CRIT_RATE_UP = 'CRIT_RATE_UP',
   FREEZE_ENEMY = 'FREEZE_ENEMY', // Slows down enemy attack bar
+  SHIELD = 'SHIELD',             // Prevents damage from wrong inputs
+  LIFESTEAL = 'LIFESTEAL',       // Heals on word completion
+  BURN = 'BURN',                 // DOT damage to boss
+  COMBO_ATTACK = 'COMBO_ATTACK', // Missiles on streak
+  SPEED_BONUS = 'SPEED_BONUS',   // Damage up on fast typing
+  PERFECT_BONUS = 'PERFECT_BONUS' // Massive damage on no-error word
 }
 
 export interface Skill {
@@ -76,13 +90,31 @@ export interface Skill {
   rarity: 'COMMON' | 'RARE' | 'EPIC';
 }
 
+export type PlayerClassType = 'SWORDSMAN' | 'ASSASSIN' | 'MAGE';
+
+export interface PlayerClassConfig {
+  id: PlayerClassType;
+  name: string;
+  avatar: string; // Emoji or Description
+  description: string;
+  baseCritChance: number;
+  damageTakenMultiplier: number; // 1.0 = normal, 1.2 = +20% damage taken
+}
+
 export interface PlayerStats {
   hp: number;
   maxHp: number;
   attackMultiplier: number;
   critChance: number;
   critDamageMultiplier: number;
+  damageTakenMultiplier: number; // New: For Assassin class
   enemySpeedReduction: number; // Percentage to slow down enemy
+  hasShield: boolean;          // New: Divine Shield
+  lifestealAmount: number;     // New: HP healed per word
+  burnDamage: number;          // New: Damage per second to boss
+  comboMissileDamage: number;  // New: Damage of missile fired every 10 hits
+  speedBonusMultiplier: number; // New: Damage multiplier for fast typing
+  perfectBonusMultiplier: number; // New: Damage multiplier for perfect words
 }
 
 export interface BossConfig {

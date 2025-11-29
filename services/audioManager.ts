@@ -25,9 +25,12 @@ class AudioManager {
     if (mute) {
       this.cancelSpeak();
     }
-    if (this.bgmGain && this.ctx) {
+    
+    // Capture context locally for TS safety
+    const ctx = this.ctx;
+    if (this.bgmGain && ctx) {
       // Smooth fade
-      const now = this.ctx.currentTime;
+      const now = ctx.currentTime;
       this.bgmGain.gain.setTargetAtTime(mute ? 0 : 0.05, now, 0.5);
     }
   }

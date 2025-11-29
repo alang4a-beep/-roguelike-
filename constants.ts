@@ -1,5 +1,5 @@
 
-import { KeyConfig, Skill, BuffType, BossConfig } from './types';
+import { KeyConfig, Skill, BuffType, BossConfig, PlayerClassConfig } from './types';
 
 // Map specific Zhuyin symbols to their QWERTY key counterparts
 export const ZHUYIN_TO_KEY: Record<string, string> = {
@@ -61,6 +61,33 @@ export const FALLBACK_VOCABULARY = [
   { chars: "台灣", zhuyin: ["ㄊㄞˊ", "ㄨㄢ"] },
 ];
 
+export const PLAYER_CLASSES: PlayerClassConfig[] = [
+  {
+    id: 'SWORDSMAN',
+    name: '劍士',
+    avatar: '🤺',
+    description: '攻守平衡，無特殊副作用',
+    baseCritChance: 0.05,
+    damageTakenMultiplier: 1.0
+  },
+  {
+    id: 'ASSASSIN',
+    name: '刺客',
+    avatar: '⚔️',
+    description: '自帶 30% 爆擊率，但防禦力低，承受傷害增加 20%',
+    baseCritChance: 0.30,
+    damageTakenMultiplier: 1.2
+  },
+  {
+    id: 'MAGE',
+    name: '法師',
+    avatar: '🧙‍♂️',
+    description: '法術攻擊成功時，有 5% 機率使 BOSS 暈眩 5 秒，但受傷害增加 30%',
+    baseCritChance: 0.05,
+    damageTakenMultiplier: 1.3
+  }
+];
+
 // ROGUELIKE SKILLS POOL
 export const ROGUELIKE_SKILLS: Skill[] = [
   {
@@ -119,6 +146,54 @@ export const ROGUELIKE_SKILLS: Skill[] = [
     value: 0.15,
     rarity: 'EPIC'
   },
+  {
+    id: 'divine_shield',
+    name: '神聖護盾',
+    description: '打錯字不會扣生命',
+    type: BuffType.SHIELD,
+    value: 1,
+    rarity: 'EPIC'
+  },
+  {
+    id: 'lifesteal',
+    name: '吸血',
+    description: '輸入完一個題目，回復 5 點生命',
+    type: BuffType.LIFESTEAL,
+    value: 5,
+    rarity: 'RARE'
+  },
+  {
+    id: 'burning_curse',
+    name: '燃燒咒',
+    description: '每秒扣除 BOSS 20 點血量',
+    type: BuffType.BURN,
+    value: 20,
+    rarity: 'RARE'
+  },
+  {
+    id: 'combo_missile',
+    name: '連擊飛彈',
+    description: '每連續 10 次正確輸入，發射飛彈攻擊 BOSS (50傷害)',
+    type: BuffType.COMBO_ATTACK,
+    value: 50,
+    rarity: 'EPIC'
+  },
+  {
+    id: 'quick_draw',
+    name: '拔刀術',
+    description: '打字間隔小於 0.3 秒，該次傷害增加 50%',
+    type: BuffType.SPEED_BONUS,
+    value: 0.5,
+    rarity: 'EPIC'
+  },
+  {
+    id: 'precision_strike',
+    name: '弱點擊破',
+    description: '單字零失誤完成，造成 300% 爆發傷害',
+    type: BuffType.PERFECT_BONUS,
+    value: 3.0,
+    rarity: 'EPIC'
+  }
 ];
 
 export const BOSS_ROSTER: BossConfig[] = [
