@@ -1163,6 +1163,20 @@ const App: React.FC = () => {
                         <Button onClick={() => startGame(gameMode)} className="w-full bg-blue-600 hover:bg-blue-500">↻ 重新遊戲</Button>
                         <Button onClick={() => setGameState(GameState.MENU)} className="w-full bg-gray-600 hover:bg-gray-500">⌂ 返回主頁</Button>
                     </div>
+                    
+                    {/* Acquired Skills List */}
+                    {acquiredSkills.length > 0 && (
+                        <div className="w-full max-w-md bg-gray-800/50 p-4 rounded-lg">
+                            <h3 className="text-gray-300 font-bold mb-2 text-center">已獲得技能</h3>
+                            <div className="flex flex-wrap gap-2 justify-center">
+                                {acquiredSkills.map((skill, idx) => (
+                                    <div key={idx} className={`text-xs px-2 py-1 rounded border ${skill.rarity === 'COMMON' ? 'bg-gray-700 text-white border-gray-500' : skill.rarity === 'RARE' ? 'bg-blue-900 text-blue-200 border-blue-500' : 'bg-purple-900 text-purple-200 border-purple-500'}`} title={skill.description}>
+                                        {skill.name}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1184,7 +1198,8 @@ const App: React.FC = () => {
             {gameState === GameState.FINISHED && (
                <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-8">
                   <h2 className="text-5xl font-bold text-red-500 mb-4">GAME OVER</h2>
-                  <p className="text-gray-300 mb-8 text-xl">你在第 {wave} 波倒下了。</p>
+                  <p className="text-gray-300 mb-2 text-xl">你在第 {wave} 波倒下了。</p>
+                  <p className="text-gray-400 mb-8 text-sm">總分: {score} | 失誤: {errors}</p>
                   <div className="flex gap-4">
                       <Button onClick={() => setGameState(GameState.MENU)}>回主選單</Button>
                       <Button variant="secondary" onClick={() => startGame(gameMode)}>再次挑戰</Button>
